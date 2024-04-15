@@ -13,6 +13,11 @@
  * Node attributes' internals.
  */
 
+#include <boost/container/flat_map.hpp>
+
+#include <algorithm>
+#include <numeric>
+
 #include "cvc5_private.h"
 
 #ifndef CVC5_ATTRIBUTE_H__INCLUDING__ATTRIBUTE_INTERNALS_H
@@ -149,12 +154,220 @@ inline uint64_t GetBitSet(uint64_t bit)
  * attributes---is simply a mapping of pair<unique-attribute-id, Node>
  * to value_type using our specialized hash function for these pairs.
  */
-template <class value_type>
-class AttrHash :
-    public std::unordered_map<std::pair<uint64_t, NodeValue*>,
-                               value_type,
-                               AttrHashFunction> {
-};/* class AttrHash<> */
+template <class V>
+class AttrHash
+{
+  // storage for this class is an unordered map of flat maps.
+  // instead of unordered_map<pair<uint64_t, NodeValue*>, V>
+  // it will be unordered_map<NodeValue*, flat_map<uint64_t, V>>
+  // which allows for quick removal of all entries matching a given NodeValue*
+
+  using l2_t = boost::container::flat_map<uint64_t, V>;
+  using l1_t = std::unordered_map<NodeValue*, l2_t, AttrBoolHashFunction>;
+
+  l1_t storage_;
+
+public:
+
+  template<typename Parent, typename L1It, typename L2It>
+  struct iter_t {
+    using parent_t = Parent;
+
+    // requirements for ForwardIterator
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = std::pair<std::pair<uint64_t, NodeValue*>, V>;
+    using reference = value_type;    // we don't supply a modifiable reference
+    using pointer = value_type*;
+    using difference_type = ptrdiff_t;
+
+    // default constructor
+    iter_t() : at_end_{true} {}
+
+    iter_t(parent_t * parent) : parent_{parent}, l1_it_(parent->storage_.begin()) {
+      at_end_ = (l1_it_ == parent->storage_.end());
+      if (!at_end_) {
+        l2_it_ = l1_it_->second.begin();
+        legalize();   // L2 map may be empty
+      }
+    }
+
+    // prerequisite: l1_it and l2_it are valid iterators
+    iter_t(parent_t * parent, L1It l1_it, L2It l2_it)
+      : at_end_(l1_it == parent->storage_.end()), parent_(parent), l1_it_(l1_it), l2_it_(l2_it) {}
+
+    // increment
+    iter_t & operator++() {  // pre
+      increment();
+      return *this;
+    }
+
+    iter_t operator++(int) {  // post
+      iter_t tmp = *this;
+      increment();
+      return tmp;
+    }
+
+    // dereference
+    value_type operator*() const {
+      return std::make_pair(std::make_pair(l2_it_->first, l1_it_->first),
+                            l2_it_->second);
+    }
+
+    // comparison
+    bool operator==(iter_t const & other) const {
+      return (at_end_ && other.at_end_) ||
+        (!at_end_ && !other.at_end_ &&
+         (l1_it_ == other.l1_it_) && (l2_it_ == other.l2_it_));
+    }
+    bool operator!=(iter_t const & other) const { return !(*this == other); }
+
+    // this is kinda weird... ideally would be private but a friend of AttrHash
+    iter_t erase() {
+      auto result = *this;
+      result.increment();
+
+      l1_it_->second.erase(l2_it_);
+
+      return result;
+    }
+
+  private:
+
+    bool at_end_;
+    parent_t* parent_;
+    L1It l1_it_;
+    L2It l2_it_;
+
+    void increment() {
+      if (at_end_)
+        return;
+
+      ++l2_it_;
+
+      legalize();
+    }
+
+    void legalize() {
+      // move forward to next valid entry
+      while (l2_it_ == l1_it_->second.end()) {
+        ++l1_it_;
+        if (l1_it_ == parent_->storage_.end()) {
+          at_end_ = true;
+          return;
+        }
+        l2_it_ = l1_it_->second.begin();
+      }
+    }
+
+  };
+
+  using iterator = iter_t<AttrHash<V>, typename l1_t::iterator, typename l2_t::iterator>;
+  using const_iterator = iter_t<const AttrHash<V>, typename l1_t::const_iterator, typename l2_t::const_iterator>;
+
+  std::size_t size() const {
+    return std::accumulate(storage_.begin(), storage_.end(), 0u,
+                           [](std::size_t sum, auto const & l2) {
+                             return sum + l2.second.size();
+                           });
+  }
+
+  auto begin() { return iterator(this); }
+  auto end() { return iterator(); }
+
+  auto begin() const { return const_iterator(const_cast<AttrHash<V>*>(this)); }
+  auto end() const { return const_iterator(); }
+
+  iterator erase(iterator it) {
+    return it.erase();
+  }
+
+  std::size_t erase(std::pair<uint64_t, NodeValue*> p) {
+    typename l1_t::iterator it1 = storage_.find(p.second);
+    if (it1 == storage_.end())
+      return 0;
+
+    typename l2_t::iterator it2 = it1->second.find(p.first);
+    if (it2 == it1->second.end())
+      return 0;
+
+    it1->second.erase(it2);
+    if (it1->second.empty())
+      storage_.erase(it1);
+
+    return 1;
+
+  }
+
+  // only used for "reconstruction", which reinserts everything into another table and swaps
+  // seems like that should just call rehash() or something
+  template<typename Iter>
+  void insert(Iter beg, Iter end) {
+    std::vector<typename iterator::value_type> entries(beg, end);
+
+    // sort by second (NodeValue*) then first (uint64_t)
+    std::sort(entries.begin(), entries.end(),
+              [](auto const & a, auto const & b) {
+                return (a.first.second < b.first.second) ||
+                  ((a.first.second == b.first.second) &&
+                   (a.first.first < b.first.first));
+              });
+
+    auto find_different_nv = [](auto nv, auto first, auto last) {
+      return std::find_if(first, last, [nv](auto const & a){ return a.first.second != nv; });
+    };
+
+    std::size_t l1_unique_count = 0;
+    for (auto it = entries.begin(); it != entries.end();
+         it = find_different_nv(it->first.second, it, entries.end())) {
+      ++l1_unique_count;
+    }
+    storage_.reserve(storage_.size() + l1_unique_count);
+
+    for (auto it = entries.begin(); it != entries.end();) {
+      auto chunk_end = std::find_if(it, entries.end(),
+                                    [it](auto const & v) { return v.first.second != it->first.second; });
+      // add to l2 map
+      auto & l2 = storage_[it->first.second];
+      l2.reserve(l2.size() + std::distance(it, chunk_end));
+      for (;it != chunk_end; ++it) {
+        l2.emplace(it->first.first, it->second);
+      }
+    }
+  }
+
+  void swap(AttrHash & other) {
+    std::swap(storage_, other.storage_);
+  }
+
+  // the main way we get new entries.
+  // AttributeManager::setAttribute is called with a NodeValue and a new attribute.
+  // it generates a fresh id and inserts the attribute
+  V & operator[](std::pair<uint64_t, NodeValue*> p) {
+    return storage_[p.second][p.first];
+  }
+
+  void clear() {
+    storage_.clear();
+  }
+
+  const_iterator find(std::pair<std::uint64_t, NodeValue*> p) const {
+    typename l1_t::const_iterator it1 = storage_.find(p.second);
+    if (it1 == storage_.end())
+      return const_iterator();
+
+    typename l2_t::const_iterator it2 = it1->second.find(p.first);
+    if (it2 == it1->second.end())
+      return const_iterator();
+
+    return const_iterator(this, it1, it2);
+  }
+
+  void delByNodeValue(NodeValue* nv) {
+    storage_.erase(nv);
+  }
+
+};
+// };/* class AttrHash<> */
 
 /**
  * In the case of Boolean-valued attributes we have a special

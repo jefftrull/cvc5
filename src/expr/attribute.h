@@ -464,12 +464,7 @@ AttributeManager::setAttribute(NodeValue* nv,
 template <class T>
 inline void AttributeManager::deleteFromTable(AttrHash<T>& table,
                                               NodeValue* nv) {
-  // This cannot use nv as anything other than a pointer!
-  const uint64_t last = attr::LastAttributeId<T>::getId();
-  for (uint64_t id = 0; id < last; ++id)
-  {
-    table.erase(std::make_pair(id, nv));
-  }
+    table.delByNodeValue(nv);
 }
 
 /** Remove all attributes from the table. */
