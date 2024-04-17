@@ -13,8 +13,6 @@
  * Node attributes' internals.
  */
 
-#include <boost/container/flat_map.hpp>
-
 #include <algorithm>
 #include <numeric>
 
@@ -162,7 +160,97 @@ class AttrHash
   // it will be unordered_map<NodeValue*, flat_map<uint64_t, V>>
   // which allows for quick removal of all entries matching a given NodeValue*
 
-  using l2_t = boost::container::flat_map<uint64_t, V>;
+  // utility flat map for Id -> V (second level)
+
+  struct IdMap {
+    using container_t = std::vector<std::pair<uint64_t, V>>;
+    using iterator = typename container_t::iterator;
+    using const_iterator = typename container_t::const_iterator;
+
+    const_iterator begin() const { return contents_.begin(); }
+    const_iterator end() const { return contents_.end(); }
+
+    iterator begin() { return contents_.begin(); }
+    iterator end() { return contents_.end(); }
+
+    std::size_t size() const { return contents_.size(); }
+
+    void reserve(std::size_t sz) { contents_.reserve(sz); }
+
+    std::pair<iterator, bool> emplace(uint64_t k, V v) {
+      auto p = std::make_pair(k, std::move(v));
+      auto range = std::equal_range(contents_.begin(), contents_.end(),
+                                    p,
+                                    [](auto const & a, auto const & b) { return a.first < b.first; });
+      if (range.first != range.second) {
+        // key already present, don't insert
+        return std::make_pair(iterator{}, false);
+      }
+
+      return std::make_pair(contents_.insert(range.first, std::move(p)), true);
+    }
+
+    const_iterator find(uint64_t key) const {
+      auto range = std::equal_range(contents_.begin(), contents_.end(),
+                                    std::make_pair(key, V{}),
+                                    [](auto const & a, auto const & b) { return a.first < b.first; });
+      if (range.first == range.second) {
+        // not in map
+        return contents_.end();
+      } else {
+        return range.first;
+      }
+    }
+
+    iterator find(uint64_t key) {
+      auto range = std::equal_range(contents_.begin(), contents_.end(),
+                                    std::make_pair(key, V{}),
+                                    [](auto const & a, auto const & b) { return a.first < b.first; });
+      if (range.first == range.second) {
+        return contents_.end();
+      } else {
+        return range.first;
+      }
+    }
+
+    iterator erase(iterator pos) {
+      return contents_.erase(pos);
+    }
+
+    V & operator[](uint64_t key) {
+      auto it = std::lower_bound(contents_.begin(), contents_.end(),
+                                 std::make_pair(key, V{}),
+                                 [](auto const & a, auto const & b) { return a.first < b.first; });
+      if ((it == contents_.end()) || (it->first != key)) {
+        // not in map
+        it = contents_.insert(it, std::make_pair(key, V{}));
+      }
+      return (*it).second;
+    }
+
+    // range insert
+    template<typename Iter>
+    void insert(Iter beg, Iter end) {
+      for (Iter it = beg; it != end; ++it) {
+        auto found_it = std::lower_bound(contents_.begin(), contents_.end(),
+                                         it->first,
+                                         [](auto const & a, auto const & b) {
+                                           return a.first < b.first;
+                                         });
+        if ((found_it != contents_.end()) && (it->first == found_it->first)) {
+          // this key is already present in the map. replace it:
+          found_it->second = it->second;
+        } else {
+          contents_.insert(found_it, *it);
+        }
+      }
+    }
+
+  private:
+    container_t contents_;
+  };
+
+  using l2_t = IdMap;
   using l1_t = std::unordered_map<NodeValue*, l2_t, AttrBoolHashFunction>;
 
   l1_t storage_;
