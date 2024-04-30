@@ -310,6 +310,8 @@ void NodeBuilder::realloc(size_t toSize)
     d_nvMaxChildren = toSize;
     Assert(d_nvMaxChildren == toSize);  // overflow check
 
+    // NodeValue is trivial, so *newBlock's lifetime has begun and we can assign members
+    static_assert(std::is_trivial_v<expr::NodeValue>);
     d_nv = newBlock;
     d_nv->d_id = d_inlineNv.d_id;
     d_nv->d_rc = 0;

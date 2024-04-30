@@ -286,9 +286,8 @@ class CVC5_EXPORT NodeValue
       (static_cast<uint32_t>(1) << NBITS_KIND) - 1;
 
   /** Uninitializing constructor for NodeBuilder's use.  */
-  NodeValue()
-  { /* do not initialize! */
-  }
+  NodeValue() = default;  // do not initialize!
+
   /** Private constructor for the null value. */
   NodeValue(int);
 
