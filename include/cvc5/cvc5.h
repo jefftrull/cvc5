@@ -1391,7 +1391,7 @@ class CVC5_EXPORT Term
     using pointer = const Term*;
 
     /** The reference type of the item */
-    using reference = const Term&;
+    using reference = const Term;
 
     /** The type returned when two iterators are subtracted */
     using difference_type = std::ptrdiff_t;

@@ -108,6 +108,15 @@ class CVC5_EXPORT NodeValue
 
     bool operator!=(const iterator& i) const { return d_i != i.d_i; }
 
+    // LegacyRandomAccessIterator requires these additional comparisons:
+    bool operator<(const iterator& i) const { return d_i < i.d_i; }
+
+    bool operator<=(const iterator& i) const { return d_i <= i.d_i; }
+
+    bool operator>(const iterator& i) const { return d_i > i.d_i; }
+
+    bool operator>=(const iterator& i) const { return d_i >= i.d_i; }
+
     iterator& operator++()
     {
       ++d_i;
