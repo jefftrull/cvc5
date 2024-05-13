@@ -161,7 +161,7 @@ std::pair<Node, RealAlgebraicNumber> removeMinAbsCoeff(Sum& sum)
 
 RealAlgebraicNumber removeConstant(Sum& sum)
 {
-  RealAlgebraicNumber res;
+  RealAlgebraicNumber res{};  // value initialize (i.e., zero)
   if (!sum.empty())
   {
     auto constantit = sum.begin();

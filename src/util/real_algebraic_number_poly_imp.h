@@ -51,7 +51,7 @@ class RealAlgebraicNumber
   friend class PolyConverter;
 
  public:
-  /** Construct as zero. */
+  /** Default construct (no initialization unless user requests with () or {}) */
   RealAlgebraicNumber() = default;
 #ifdef CVC5_POLY_IMP
   /** Move from a poly::AlgebraicNumber type. */
