@@ -74,8 +74,6 @@ class CVC5_EXPORT NodeValue
                                                         const NodeValue* nv);
   friend void kind::metakind::deleteNodeValueConstant(NodeValue* nv);
 
-  friend class RefCountGuard;
-
   /* ------------------------------------------------------------------------ */
  public:
   /* ------------------------------------------------------------------------ */
@@ -249,41 +247,6 @@ class CVC5_EXPORT NodeValue
   /* ------------------------------------------------------------------------ */
  private:
   /* ------------------------------------------------------------------------ */
-
-  /**
-   * RAII guard that increases the reference count if the reference count to be
-   * > 0.  Otherwise, this does nothing. This does not just increment the
-   * reference count to avoid maxing out the d_rc field. This is only for low
-   * level functions.
-   */
-  class RefCountGuard
-  {
-   public:
-    RefCountGuard(const NodeValue* nv) : d_nv(const_cast<NodeValue*>(nv))
-    {
-      d_increased = (d_nv->d_rc == 0);
-      if (d_increased)
-      {
-        d_nv->d_rc = 1;
-      }
-    }
-    ~RefCountGuard()
-    {
-      // dec() without marking for deletion: we don't want to garbage
-      // collect this NodeValue if ours is the last reference to it.
-      // E.g., this can happen when debugging code calls the print
-      // routines below.  As RefCountGuards are scoped on the stack,
-      // this should be fine---but not in multithreaded contexts!
-      if (d_increased)
-      {
-        --d_nv->d_rc;
-      }
-    }
-
-   private:
-    NodeValue* d_nv;
-    bool d_increased;
-  }; /* NodeValue::RefCountGuard */
 
   /** Maximum reference count possible.  Used for sticky
    *  reference-counting.  Should be (1 << num_bits(d_rc)) - 1 */
