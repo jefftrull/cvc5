@@ -14,7 +14,7 @@
  */
 #include <algorithm>
 #include <sstream>
-#include <stack>
+#include <vector>
 #include <utility>
 
 #include "base/check.h"
