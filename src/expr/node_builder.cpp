@@ -266,7 +266,7 @@ NodeBuilder& NodeBuilder::append(const TypeNode& typeNode)
                        "attempt to access it after conversion";
   Assert(!typeNode.isNull()) << "Cannot use NULL Node as a child of a Node";
   allocateNvIfNecessaryForAppend();
-  expr::NodeValue* nv = typeNode.d_nv;
+  expr::NodeValue* nv = typeNode.d_nv.get();
   nv->inc();
   d_nv->d_children[d_nv->d_nchildren++] = nv;
   Assert(d_nv->d_nchildren <= d_nvMaxChildren);

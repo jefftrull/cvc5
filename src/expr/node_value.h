@@ -147,6 +147,14 @@ class CVC5_EXPORT NodeValue
 
   }; /* class NodeValue::iterator<T> */
 
+  friend inline void intrusive_ptr_add_ref(NodeValue* nv) {
+    nv->inc();
+  }
+
+  friend inline void intrusive_ptr_release(NodeValue* nv) {
+    nv->dec();
+  }
+
   uint64_t getId() const { return d_id; }
 
   Kind getKind() const { return dKindToKind(d_kind); }

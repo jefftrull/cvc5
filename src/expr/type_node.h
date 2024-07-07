@@ -25,6 +25,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <boost/smart_ptr/intrusive_ptr.hpp>
+
 #include "base/check.h"
 #include "expr/kind.h"
 #include "expr/metakind.h"
@@ -60,7 +62,7 @@ class CVC5_EXPORT TypeNode
   static TypeNode s_null;
 
   /** The referenced NodeValue */
-  expr::NodeValue* d_nv;
+  boost::intrusive_ptr<expr::NodeValue> d_nv;
 
   /**
    * This constructor is reserved for use by the TypeNode package.
@@ -870,23 +872,19 @@ inline const T& TypeNode::getConst() const {
 inline TypeNode::TypeNode(const expr::NodeValue* ev) :
   d_nv(const_cast<expr::NodeValue*> (ev)) {
   Assert(d_nv != NULL) << "Expecting a non-NULL expression value!";
-  d_nv->inc();
 }
 
 inline TypeNode::TypeNode(const TypeNode& typeNode) {
   Assert(typeNode.d_nv != NULL) << "Expecting a non-NULL expression value!";
   d_nv = typeNode.d_nv;
-  d_nv->inc();
 }
 
 inline TypeNode::~TypeNode() {
   Assert(d_nv != NULL) << "Expecting a non-NULL expression value!";
-  d_nv->dec();
 }
 
 inline void TypeNode::assignNodeValue(expr::NodeValue* ev) {
   d_nv = ev;
-  d_nv->inc();
 }
 
 inline TypeNode& TypeNode::operator=(const TypeNode& typeNode) {
@@ -894,9 +892,7 @@ inline TypeNode& TypeNode::operator=(const TypeNode& typeNode) {
   Assert(typeNode.d_nv != NULL)
       << "Expecting a non-NULL expression value on RHS!";
   if(__builtin_expect( ( d_nv != typeNode.d_nv ), true )) {
-    d_nv->dec();
     d_nv = typeNode.d_nv;
-    d_nv->inc();
   }
   return *this;
 }
@@ -904,24 +900,24 @@ inline TypeNode& TypeNode::operator=(const TypeNode& typeNode) {
 template <class AttrKind>
 inline typename AttrKind::value_type TypeNode::
 getAttribute(const AttrKind&) const {
-  return NodeManager::currentNM()->getAttribute(d_nv, AttrKind());
+  return NodeManager::currentNM()->getAttribute(d_nv.get(), AttrKind());
 }
 
 template <class AttrKind>
 inline bool TypeNode::
 hasAttribute(const AttrKind&) const {
-  return NodeManager::currentNM()->hasAttribute(d_nv, AttrKind());
+  return NodeManager::currentNM()->hasAttribute(d_nv.get(), AttrKind());
 }
 
 template <class AttrKind>
 inline bool TypeNode::getAttribute(const AttrKind&, typename AttrKind::value_type& ret) const {
-  return NodeManager::currentNM()->getAttribute(d_nv, AttrKind(), ret);
+  return NodeManager::currentNM()->getAttribute(d_nv.get(), AttrKind(), ret);
 }
 
 template <class AttrKind>
 inline void TypeNode::
 setAttribute(const AttrKind&, const typename AttrKind::value_type& value) {
-  NodeManager::currentNM()->setAttribute(d_nv, AttrKind(), value);
+  NodeManager::currentNM()->setAttribute(d_nv.get(), AttrKind(), value);
 }
 
 inline void TypeNode::printAst(std::ostream& out, int indent) const {

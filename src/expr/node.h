@@ -22,10 +22,13 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
+#include <boost/smart_ptr/intrusive_ptr.hpp>
 
 #include "base/check.h"
 #include "base/exception.h"
@@ -176,7 +179,7 @@ class NodeTemplate {
   static NodeTemplate s_null;
 
   /** The referenced NodeValue */
-  expr::NodeValue* d_nv;
+  std::conditional_t<ref_count, boost::intrusive_ptr<expr::NodeValue>, expr::NodeValue*> d_nv;
 
   /**
    * This constructor is reserved for use by the NodeTemplate package; one
@@ -280,6 +283,20 @@ public:
   * @return reference to this node
   */
  NodeTemplate& operator=(const NodeTemplate& node);
+
+ /**
+  * Move constructor.
+  * @param node the node to move from
+  */
+ NodeTemplate(NodeTemplate&& node) noexcept;
+
+ /**
+  * Move assignment operator for nodes, acquire the contents of node
+  * for this node and invalidate the old node
+  * @param node the node to move from
+  * @return reference to this node
+  */
+ NodeTemplate& operator=(NodeTemplate&& node) noexcept;
 
  /**
   * Assignment operator for nodes, copies the relevant information from node
@@ -688,7 +705,7 @@ public:
    */
   inline iterator begin() {
     assertTNodeNotExpired();
-    return d_nv->begin< NodeTemplate<ref_count> >();
+    return d_nv->template begin< NodeTemplate<ref_count> >();
   }
 
   /**
@@ -698,7 +715,7 @@ public:
    */
   inline iterator end() {
     assertTNodeNotExpired();
-    return d_nv->end< NodeTemplate<ref_count> >();
+    return d_nv->template end< NodeTemplate<ref_count> >();
   }
 
   /**
@@ -743,7 +760,7 @@ public:
   const_iterator begin() const
   {
     assertTNodeNotExpired();
-    return d_nv->begin< NodeTemplate<ref_count> >();
+    return d_nv->template begin< NodeTemplate<ref_count> >();
   }
 
   /**
@@ -754,7 +771,7 @@ public:
   const_iterator end() const
   {
     assertTNodeNotExpired();
-    return d_nv->end< NodeTemplate<ref_count> >();
+    return d_nv->template end< NodeTemplate<ref_count> >();
   }
 
   /**
@@ -764,7 +781,7 @@ public:
   const_reverse_iterator rbegin() const
   {
     assertTNodeNotExpired();
-    return std::make_reverse_iterator(d_nv->end<NodeTemplate<ref_count>>());
+    return std::make_reverse_iterator(d_nv->template end<NodeTemplate<ref_count>>());
   }
 
   /**
@@ -774,7 +791,7 @@ public:
   const_reverse_iterator rend() const
   {
     assertTNodeNotExpired();
-    return std::make_reverse_iterator(d_nv->begin<NodeTemplate<ref_count>>());
+    return std::make_reverse_iterator(d_nv->template begin<NodeTemplate<ref_count>>());
   }
 
   /**
@@ -974,7 +991,7 @@ template <bool ref_count>
 template <class T>
 inline const T& NodeTemplate<ref_count>::getConst() const {
   assertTNodeNotExpired();
-  return d_nv->getConst<T>();
+  return d_nv->template getConst<T>();
 }
 
 template <bool ref_count>
@@ -1024,9 +1041,7 @@ template <bool ref_count>
 NodeTemplate<ref_count>::NodeTemplate(const expr::NodeValue* ev) :
   d_nv(const_cast<expr::NodeValue*> (ev)) {
   Assert(d_nv != NULL) << "Expecting a non-NULL expression value!";
-  if(ref_count) {
-    d_nv->inc();
-  } else {
+  if constexpr (!ref_count) {
     Assert(d_nv->d_rc > 0 || d_nv == &expr::NodeValue::null())
         << "TNode constructed from NodeValue with rc == 0";
   }
@@ -1039,11 +1054,11 @@ NodeTemplate<ref_count>::NodeTemplate(const expr::NodeValue* ev) :
 template <bool ref_count>
 NodeTemplate<ref_count>::NodeTemplate(const NodeTemplate<!ref_count>& e) {
   Assert(e.d_nv != NULL) << "Expecting a non-NULL expression value!";
-  d_nv = e.d_nv;
-  if(ref_count) {
-    Assert(d_nv->d_rc > 0) << "Node constructed from TNode with rc == 0";
-    d_nv->inc();
+  if constexpr (ref_count) {
+    d_nv = e.d_nv;
+    Assert(d_nv->d_rc > 1) << "Node constructed from TNode with rc == 0";
   } else {
+    d_nv = e.d_nv.get();
     // shouldn't ever fail
     Assert(d_nv->d_rc > 0) << "TNode constructed from Node with rc == 0";
   }
@@ -1053,10 +1068,9 @@ template <bool ref_count>
 NodeTemplate<ref_count>::NodeTemplate(const NodeTemplate& e) {
   Assert(e.d_nv != NULL) << "Expecting a non-NULL expression value!";
   d_nv = e.d_nv;
-  if(ref_count) {
+  if (ref_count) {
     // shouldn't ever fail
-    Assert(d_nv->d_rc > 0) << "Node constructed from Node with rc == 0";
-    d_nv->inc();
+    Assert(d_nv->d_rc > 1) << "Node constructed from Node with rc == 0";
   } else {
     Assert(d_nv->d_rc > 0) << "TNode constructed from TNode with rc == 0";
   }
@@ -1064,20 +1078,18 @@ NodeTemplate<ref_count>::NodeTemplate(const NodeTemplate& e) {
 
 template <bool ref_count>
 NodeTemplate<ref_count>::~NodeTemplate() {
-  Assert(d_nv != NULL) << "Expecting a non-NULL expression value!";
+  if (!d_nv)
+    return;  // moved-from state, no action to take
   if(ref_count) {
     // shouldn't ever fail
     Assert(d_nv->d_rc > 0) << "Node reference count would be negative";
-    d_nv->dec();
   }
 }
 
 template <bool ref_count>
 void NodeTemplate<ref_count>::assignNodeValue(expr::NodeValue* ev) {
   d_nv = ev;
-  if(ref_count) {
-    d_nv->inc();
-  } else {
+  if(!ref_count) {
     Assert(d_nv->d_rc > 0) << "TNode assigned to NodeValue with rc == 0";
   }
 }
@@ -1085,19 +1097,16 @@ void NodeTemplate<ref_count>::assignNodeValue(expr::NodeValue* ev) {
 template <bool ref_count>
 NodeTemplate<ref_count>& NodeTemplate<ref_count>::
 operator=(const NodeTemplate& e) {
-  Assert(d_nv != NULL) << "Expecting a non-NULL expression value!";
   Assert(e.d_nv != NULL) << "Expecting a non-NULL expression value on RHS!";
   if(__builtin_expect( ( d_nv != e.d_nv ), true )) {
-    if(ref_count) {
+    if(ref_count && d_nv) {
       // shouldn't ever fail
       Assert(d_nv->d_rc > 0) << "Node reference count would be negative";
-      d_nv->dec();
     }
     d_nv = e.d_nv;
     if(ref_count) {
       // shouldn't ever fail
-      Assert(d_nv->d_rc > 0) << "Node assigned from Node with rc == 0";
-      d_nv->inc();
+      Assert(d_nv->d_rc > 1) << "Node assigned from Node with rc == 0";
     } else {
       Assert(d_nv->d_rc > 0) << "TNode assigned from TNode with rc == 0";
     }
@@ -1108,23 +1117,29 @@ operator=(const NodeTemplate& e) {
 template <bool ref_count>
 NodeTemplate<ref_count>& NodeTemplate<ref_count>::
 operator=(const NodeTemplate<!ref_count>& e) {
-  Assert(d_nv != NULL) << "Expecting a non-NULL expression value!";
   Assert(e.d_nv != NULL) << "Expecting a non-NULL expression value on RHS!";
   if(__builtin_expect( ( d_nv != e.d_nv ), true )) {
-    if(ref_count) {
-      // shouldn't ever fail
-      Assert(d_nv->d_rc > 0) << "Node reference count would be negative";
-      d_nv->dec();
-    }
-    d_nv = e.d_nv;
-    if(ref_count) {
-      Assert(d_nv->d_rc > 0) << "Node assigned from TNode with rc == 0";
-      d_nv->inc();
+    if constexpr(ref_count) {
+      if (d_nv)
+        // shouldn't ever fail
+        Assert(d_nv->d_rc > 0) << "Node reference count would be negative";
+      d_nv = e.d_nv;
     } else {
-      // shouldn't ever happen
-      Assert(d_nv->d_rc > 0) << "TNode assigned from Node with rc == 0";
+      d_nv = e.d_nv.get();
     }
   }
+  return *this;
+}
+
+// move constructor and move assignment operators
+
+template <bool ref_count>
+NodeTemplate<ref_count>::NodeTemplate(NodeTemplate && other) noexcept
+: d_nv(std::move(other.d_nv)) {}
+
+template <bool ref_count>
+NodeTemplate<ref_count>& NodeTemplate<ref_count>::operator=(NodeTemplate<ref_count>&& other) noexcept {
+  d_nv = std::move(other.d_nv);
   return *this;
 }
 

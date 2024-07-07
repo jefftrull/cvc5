@@ -337,7 +337,7 @@ const DType& NodeManager::getDTypeFor(TypeNode tn) const
 
 const DType& NodeManager::getDTypeFor(Node n) const
 {
-  return getDTypeFor(TypeNode(n.d_nv));
+  return getDTypeFor(TypeNode(n.d_nv.get()));
 }
 
 const DType& NodeManager::getDTypeForIndex(size_t index) const
@@ -1011,10 +1011,10 @@ TypeNode NodeManager::mkSort(TypeNode constructor,
          && constructor.getNumChildren() == 0)
       << "expected a sort constructor";
   Assert(children.size() > 0) << "expected non-zero # of children";
-  Assert(hasAttribute(constructor.d_nv, expr::SortArityAttr())
-         && hasAttribute(constructor.d_nv, expr::VarNameAttr()))
+  Assert(hasAttribute(constructor.d_nv.get(), expr::SortArityAttr())
+         && hasAttribute(constructor.d_nv.get(), expr::VarNameAttr()))
       << "expected a sort constructor";
-  Assert(getAttribute(constructor.d_nv, expr::SortArityAttr())
+  Assert(getAttribute(constructor.d_nv.get(), expr::SortArityAttr())
          == children.size())
       << "arity mismatch in application of sort constructor";
   NodeBuilder nb(this, Kind::INSTANTIATED_SORT_TYPE);

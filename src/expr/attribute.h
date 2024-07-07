@@ -581,27 +581,27 @@ NodeManager::setAttribute(TNode n, const AttrKind&,
 template <class AttrKind>
 inline typename AttrKind::value_type
 NodeManager::getAttribute(TypeNode n, const AttrKind&) const {
-  return d_attrManager->getAttribute(n.d_nv, AttrKind());
+  return d_attrManager->getAttribute(n.d_nv.get(), AttrKind());
 }
 
 template <class AttrKind>
 inline bool
 NodeManager::hasAttribute(TypeNode n, const AttrKind&) const {
-  return d_attrManager->hasAttribute(n.d_nv, AttrKind());
+  return d_attrManager->hasAttribute(n.d_nv.get(), AttrKind());
 }
 
 template <class AttrKind>
 inline bool
 NodeManager::getAttribute(TypeNode n, const AttrKind&,
                           typename AttrKind::value_type& ret) const {
-  return d_attrManager->getAttribute(n.d_nv, AttrKind(), ret);
+  return d_attrManager->getAttribute(n.d_nv.get(), AttrKind(), ret);
 }
 
 template <class AttrKind>
 inline void
 NodeManager::setAttribute(TypeNode n, const AttrKind&,
                           const typename AttrKind::value_type& value) {
-  d_attrManager->setAttribute(n.d_nv, AttrKind(), value);
+  d_attrManager->setAttribute(n.d_nv.get(), AttrKind(), value);
 }
 
 }  // namespace cvc5::internal
