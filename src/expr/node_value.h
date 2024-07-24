@@ -54,10 +54,17 @@ namespace kind {
 
 namespace expr {
 
+class NodeValueBase {
+public:
+  virtual ~NodeValueBase() = 0;
+  virtual NodeValue* getChild(int i) const = 0;
+  virtual uint32_t getNumChildren() const = 0;
+};
+
 /**
  * This is a NodeValue.
  */
-class CVC5_EXPORT NodeValue
+class CVC5_EXPORT NodeValue : NodeValueBase
 {
   template <bool>
   friend class cvc5::internal::NodeTemplate;
@@ -161,7 +168,7 @@ class CVC5_EXPORT NodeValue
 
   kind::MetaKind getMetaKind() const { return kind::metaKindOf(getKind()); }
 
-  uint32_t getNumChildren() const
+  inline uint32_t getNumChildren() const final
   {
     return (getMetaKind() == kind::metakind::PARAMETERIZED) ? d_nchildren - 1
                                                             : d_nchildren;
@@ -187,7 +194,8 @@ class CVC5_EXPORT NodeValue
   uint32_t getRefCount() const { return d_rc; }
 
   NodeValue* getOperator() const;
-  NodeValue* getChild(int i) const;
+  inline NodeValue* getChild(int i) const final;
+
 
   /** If this is a CONST_* Node, extract the constant from it.  */
   template <class T>
@@ -297,6 +305,8 @@ class CVC5_EXPORT NodeValue
   NodeValue()
   { /* do not initialize! */
   }
+  ~NodeValue() override;
+
   /** Private constructor for the null value. */
   NodeValue(int);
 
@@ -363,6 +373,7 @@ class CVC5_EXPORT NodeValue
   /** Kind of the expression */
   uint32_t d_kind : NBITS_KIND;
 
+private:
   /** Number of children */
   uint32_t d_nchildren : NBITS_NCHILDREN;
 
