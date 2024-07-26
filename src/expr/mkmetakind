@@ -273,9 +273,9 @@ ${class} const& NodeValue::getConst< ${class} >() const {
   // To support non-inlined CONSTANT-kinded NodeValues (those that are
   // \"constructed\" when initially checking them against the NodeManager
   // pool), we must check d_nchildren here.
-  return d_nchildren == 0
-    ? *reinterpret_cast< ${class} const* >(d_children)
-    : *reinterpret_cast< ${class} const* >(d_children[0]);
+  return getNumChildEntries() == 0
+    ? *reinterpret_cast< ${class} const* >(getChildEntries())
+    : *reinterpret_cast< ${class} const* >(getChildEntry(0));
 }
 
 // re-enable the warning
@@ -329,7 +329,7 @@ Node NodeManager::mkConst(Kind k, const ${class}& val)
   cname=`echo "${class}" | awk 'BEGIN {FS="::"} {print$NF}'`
   metakind_constDeleters="${metakind_constDeleters}
   case Kind::$1:
-    std::destroy_at(reinterpret_cast< ${class}* >(nv->d_children));
+    std::destroy_at(reinterpret_cast< const ${class}* >(nv->getChildEntries()));
     break;
 "
 }

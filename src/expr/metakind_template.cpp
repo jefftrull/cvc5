@@ -79,20 +79,20 @@ struct NodeValueConstCompare
   {
     if (pool)
     {
-      if (x->d_nchildren == 1)
+      if (x->getNumChildEntries() == 1)
       {
-        Assert(y->d_nchildren == 0);
+        Assert(y->getNumChildEntries() == 0);
         return compare(y, x);
       }
-      else if (y->d_nchildren == 1)
+      else if (y->getNumChildEntries() == 1)
       {
-        Assert(x->d_nchildren == 0);
-        return x->getConst<T>() == *reinterpret_cast<T*>(y->d_children[0]);
+        Assert(x->getNumChildEntries() == 0);
+        return x->getConst<T>() == *reinterpret_cast<T*>(y->getChildEntry(0));
       }
     }
 
-    Assert(x->d_nchildren == 0);
-    Assert(y->d_nchildren == 0);
+    Assert(x->getNumChildEntries() == 0);
+    Assert(y->getNumChildEntries() == 0);
     return x->getConst<T>() == y->getConst<T>();
   }
 
@@ -136,7 +136,7 @@ default:
     }
   }
 
-  if(nv1->d_nchildren != nv2->d_nchildren) {
+  if(nv1->getNumChildEntries() != nv2->getNumChildEntries()) {
     return false;
   }
 

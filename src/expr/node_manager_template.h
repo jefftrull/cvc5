@@ -806,7 +806,7 @@ class NodeManager
   template <size_t N>
   struct NVStorage
   {
-    expr::NodeValue nv;
+    expr::NodeValueClassic nv;
     expr::NodeValue* child[N];
   };
 

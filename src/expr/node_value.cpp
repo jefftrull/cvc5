@@ -35,11 +35,12 @@ using namespace std;
 namespace cvc5::internal {
 namespace expr {
 
-// despite NodeValueBase being pure virtual we have to do this
-NodeValueBase::~NodeValueBase() {}
-
-// this we would have to do regardless
 NodeValue::~NodeValue() {}
+
+NodeValue::NodeValue(int)
+  : d_id(0), d_rc(MAX_RC), d_kind(static_cast<uint32_t>(Kind::NULL_EXPR))
+{
+}
 
 string NodeValue::toString() const {
   stringstream ss;

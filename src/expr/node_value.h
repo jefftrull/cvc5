@@ -54,17 +54,10 @@ namespace kind {
 
 namespace expr {
 
-class NodeValueBase {
-public:
-  virtual ~NodeValueBase() = 0;
-  virtual NodeValue* getChild(int i) const = 0;
-  virtual uint32_t getNumChildren() const = 0;
-};
-
 /**
- * This is a NodeValue.
+ * This is a NodeValue, a pure virtual base for implementations of different sizes and holding different things
  */
-class CVC5_EXPORT NodeValue : NodeValueBase
+class CVC5_EXPORT NodeValue
 {
   template <bool>
   friend class cvc5::internal::NodeTemplate;
@@ -86,6 +79,8 @@ class CVC5_EXPORT NodeValue : NodeValueBase
   /* ------------------------------------------------------------------------ */
  public:
   /* ------------------------------------------------------------------------ */
+
+  virtual ~NodeValue() = 0;
 
   using nv_iterator = NodeValue**;
   using const_nv_iterator = NodeValue const* const*;
@@ -168,10 +163,17 @@ class CVC5_EXPORT NodeValue : NodeValueBase
 
   kind::MetaKind getMetaKind() const { return kind::metaKindOf(getKind()); }
 
-  inline uint32_t getNumChildren() const final
+  // Derived classes must provide contiguous storage for NodeValue* children
+  // Sometimes other things are stored there :(
+  virtual NodeValue* const * getChildEntries() const = 0;
+  virtual NodeValue* * getChildEntries() = 0;
+  virtual uint32_t getNumChildEntries() const = 0;  // amount of storage
+  virtual NodeValue* getChildEntry(int i) const = 0;
+
+  inline uint32_t getNumChildren() const
   {
-    return (getMetaKind() == kind::metakind::PARAMETERIZED) ? d_nchildren - 1
-                                                            : d_nchildren;
+    return (getMetaKind() == kind::metakind::PARAMETERIZED) ? getNumChildEntries() - 1
+                                                            : getNumChildEntries();
   }
 
   /* ------------------------------ Header ---------------------------------- */
@@ -194,18 +196,14 @@ class CVC5_EXPORT NodeValue : NodeValueBase
   uint32_t getRefCount() const { return d_rc; }
 
   NodeValue* getOperator() const;
-  inline NodeValue* getChild(int i) const final;
+  inline NodeValue* getChild(int i) const;
 
 
   /** If this is a CONST_* Node, extract the constant from it.  */
   template <class T>
   const T& getConst() const;
 
-  static inline NodeValue& null()
-  {
-    static NodeValue* s_null = new NodeValue(0);
-    return *s_null;
-  }
+  static inline NodeValue& null();
 
   /**
    * Hash this NodeValue.  For hash_maps, hash_sets, etc.. but this is
@@ -292,24 +290,24 @@ class CVC5_EXPORT NodeValue : NodeValueBase
     bool d_increased;
   }; /* NodeValue::RefCountGuard */
 
+  /** A mask for d_kind */
+  static constexpr uint32_t kindMask =
+      (static_cast<uint32_t>(1) << NBITS_KIND) - 1;
+
+protected:
   /** Maximum reference count possible.  Used for sticky
    *  reference-counting.  Should be (1 << num_bits(d_rc)) - 1 */
   static constexpr uint32_t MAX_RC =
       (static_cast<uint32_t>(1) << NBITS_REFCOUNT) - 1;
 
-  /** A mask for d_kind */
-  static constexpr uint32_t kindMask =
-      (static_cast<uint32_t>(1) << NBITS_KIND) - 1;
-
   /** Uninitializing constructor for NodeBuilder's use.  */
   NodeValue()
   { /* do not initialize! */
   }
-  ~NodeValue() override;
-
-  /** Private constructor for the null value. */
+  /** Private constructor for initializing the base class members */
   NodeValue(int);
 
+private:
   void inc()
   {
     if (__builtin_expect((d_rc < MAX_RC - 1), true))
@@ -372,14 +370,43 @@ class CVC5_EXPORT NodeValue : NodeValueBase
 
   /** Kind of the expression */
   uint32_t d_kind : NBITS_KIND;
+}; /* class NodeValue */
+
+class CVC5_EXPORT NodeValueClassic : public NodeValue {
+
+  friend class cvc5::internal::NodeBuilder;
+  friend class cvc5::internal::NodeManager;
+
+  // define required member functions
+
+  inline NodeValue* const * getChildEntries() const final;
+  inline NodeValue* * getChildEntries() final;
+  inline uint32_t getNumChildEntries() const final;
+  inline NodeValue* getChildEntry(int i) const final;
 
 private:
+  friend class NodeValue;
+
+  /** Uninitializing constructor for NodeBuilder's use.  */
+  NodeValueClassic()
+  { /* do not initialize! */
+  }
+
+  /** Private constructor for the null value. */
+  NodeValueClassic(int);
+
   /** Number of children */
   uint32_t d_nchildren : NBITS_NCHILDREN;
 
   /** Variable number of child nodes */
   NodeValue* d_children[0];
-}; /* class NodeValue */
+};
+
+inline NodeValue& NodeValue::null()
+{
+  static NodeValue* s_null = new NodeValueClassic(0);
+  return *s_null;
+}
 
 /**
  * Provides a symmetric addition operator to that already defined in
@@ -431,11 +458,8 @@ struct NodeValueIDEquality {
 
 std::ostream& operator<<(std::ostream& out, const NodeValue& nv);
 
-inline NodeValue::NodeValue(int)
-    : d_id(0),
-      d_rc(MAX_RC),
-      d_kind(static_cast<uint32_t>(Kind::NULL_EXPR)),
-      d_nchildren(0)
+inline NodeValueClassic::NodeValueClassic(int)
+  : NodeValue(0), d_nchildren(0)
 {
 }
 
@@ -446,24 +470,24 @@ inline void NodeValue::decrRefCounts() {
 }
 
 inline NodeValue::nv_iterator NodeValue::nv_begin() {
-  return d_children;
+  return getChildEntries();
 }
 
 inline NodeValue::nv_iterator NodeValue::nv_end() {
-  return d_children + d_nchildren;
+  return getChildEntries() + getNumChildEntries();
 }
 
 inline NodeValue::const_nv_iterator NodeValue::nv_begin() const {
-  return d_children;
+  return getChildEntries();
 }
 
 inline NodeValue::const_nv_iterator NodeValue::nv_end() const {
-  return d_children + d_nchildren;
+  return getChildEntries() + getNumChildEntries();
 }
 
 template <typename T>
 inline NodeValue::iterator<T> NodeValue::begin() const {
-  NodeValue* const* firstChild = d_children;
+  NodeValue* const* firstChild = getChildEntries();
   if(getMetaKind() == kind::metakind::PARAMETERIZED) {
     ++firstChild;
   }
@@ -472,12 +496,28 @@ inline NodeValue::iterator<T> NodeValue::begin() const {
 
 template <typename T>
 inline NodeValue::iterator<T> NodeValue::end() const {
-  return iterator<T>(d_children + d_nchildren);
+  return iterator<T>(getChildEntries() + getNumChildEntries());
 }
 
 inline NodeValue* NodeValue::getOperator() const {
   Assert(getMetaKind() == kind::metakind::PARAMETERIZED);
-  return d_children[0];
+  return getChildEntry(0);
+}
+
+inline NodeValue* const * NodeValueClassic::getChildEntries() const {
+  return d_children;
+}
+
+inline NodeValue* * NodeValueClassic::getChildEntries() {
+  return d_children;
+}
+
+inline uint32_t NodeValueClassic::getNumChildEntries() const {
+  return d_nchildren;
+}
+
+inline NodeValue* NodeValueClassic::getChildEntry(int i) const {
+  return d_children[i];
 }
 
 inline NodeValue* NodeValue::getChild(int i) const {
@@ -485,8 +525,8 @@ inline NodeValue* NodeValue::getChild(int i) const {
     ++i;
   }
 
-  Assert(i >= 0 && unsigned(i) < d_nchildren);
-  return d_children[i];
+  Assert(i >= 0 && unsigned(i) < getNumChildEntries());
+  return getChildEntry(i);
 }
 
 }  // namespace expr

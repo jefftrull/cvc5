@@ -377,7 +377,7 @@ class NodeBuilder {
    * An "in-line" stack-allocated buffer for use by the
    * NodeBuilder.
    */
-  expr::NodeValue d_inlineNv;
+  expr::NodeValueClassic d_inlineNv;
   /**
    * Space for the children of the node being constructed.  This is
    * never accessed directly, but rather through
@@ -389,7 +389,7 @@ class NodeBuilder {
    * A pointer to the "current" NodeValue buffer; either &d_inlineNv
    * or a heap-allocated one if d_inlineNv wasn't big enough.
    */
-  expr::NodeValue* d_nv;
+  expr::NodeValueClassic* d_nv;
 
   /** The NodeManager at play */
   NodeManager* d_nm;

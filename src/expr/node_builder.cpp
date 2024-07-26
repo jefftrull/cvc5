@@ -284,8 +284,8 @@ void NodeBuilder::realloc(size_t toSize)
   if (CVC5_PREDICT_FALSE(nvIsAllocated()))
   {
     // Ensure d_nv is not modified on allocation failure
-    expr::NodeValue* newBlock = (expr::NodeValue*)std::realloc(
-        d_nv, sizeof(expr::NodeValue) + (sizeof(expr::NodeValue*) * toSize));
+    expr::NodeValueClassic* newBlock = (expr::NodeValueClassic*)std::realloc(
+        d_nv, sizeof(expr::NodeValueClassic) + (sizeof(expr::NodeValue*) * toSize));
     if (newBlock == nullptr)
     {
       // In this case, d_nv was NOT freed.  If we throw, the
@@ -301,12 +301,14 @@ void NodeBuilder::realloc(size_t toSize)
   else
   {
     // Ensure d_nv is not modified on allocation failure
-    expr::NodeValue* newBlock = (expr::NodeValue*)std::malloc(
-        sizeof(expr::NodeValue) + (sizeof(expr::NodeValue*) * toSize));
+    expr::NodeValueClassic* newBlock = (expr::NodeValueClassic*)std::malloc(
+        sizeof(expr::NodeValueClassic) + (sizeof(expr::NodeValue*) * toSize));
     if (newBlock == nullptr)
     {
       throw std::bad_alloc();
     }
+    // placement new to start lifetime (and set the vtable!)
+    newBlock = new (newBlock) expr::NodeValueClassic();
     d_nvMaxChildren = toSize;
     Assert(d_nvMaxChildren == toSize);  // overflow check
 
@@ -405,12 +407,14 @@ expr::NodeValue* NodeBuilder::constructNV()
            "no children permitted";
 
     // we have to copy the inline NodeValue out
-    expr::NodeValue* nv =
-        (expr::NodeValue*)std::malloc(sizeof(expr::NodeValue));
+    expr::NodeValueClassic* nv =
+        (expr::NodeValueClassic*)std::malloc(sizeof(expr::NodeValueClassic));
     if (nv == nullptr)
     {
       throw std::bad_alloc();
     }
+    nv = new (nv) expr::NodeValueClassic();
+
     // there are no children, so we don't have to worry about
     // reference counts in this case.
     nv->d_nchildren = 0;
@@ -488,13 +492,14 @@ expr::NodeValue* NodeBuilder::constructNV()
        * reference count. */
 
       // create the canonical expression value for this node
-      expr::NodeValue* nv = (expr::NodeValue*)std::malloc(
-          sizeof(expr::NodeValue)
+      expr::NodeValueClassic* nv = (expr::NodeValueClassic*)std::malloc(
+          sizeof(expr::NodeValueClassic)
           + (sizeof(expr::NodeValue*) * d_inlineNv.d_nchildren));
       if (nv == nullptr)
       {
         throw std::bad_alloc();
       }
+      nv = new (nv) expr::NodeValueClassic();
       nv->d_nchildren = d_inlineNv.d_nchildren;
       nv->d_kind = d_inlineNv.d_kind;
       nv->d_id = d_nm->d_nextId++;
@@ -670,9 +675,9 @@ void NodeBuilder::crop()
       && CVC5_PREDICT_TRUE(d_nvMaxChildren > d_nv->d_nchildren))
   {
     // Ensure d_nv is not modified on allocation failure
-    expr::NodeValue* newBlock = (expr::NodeValue*)std::realloc(
+    expr::NodeValueClassic* newBlock = (expr::NodeValueClassic*)std::realloc(
         d_nv,
-        sizeof(expr::NodeValue)
+        sizeof(expr::NodeValueClassic)
             + (sizeof(expr::NodeValue*) * d_nv->d_nchildren));
     if (newBlock == nullptr)
     {

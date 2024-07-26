@@ -1313,7 +1313,7 @@ template <class NodeClass, class T>
 NodeClass NodeManager::mkConstInternal(Kind k, const T& val)
 {
   NVStorage<1> nvStorage;
-  expr::NodeValue& nvStack = reinterpret_cast<expr::NodeValue&>(nvStorage);
+  expr::NodeValueClassic& nvStack = reinterpret_cast<expr::NodeValueClassic&>(nvStorage);
 
   nvStack.d_id = 0;
   nvStack.d_kind = static_cast<uint32_t>(k);
@@ -1343,28 +1343,29 @@ NodeClass NodeManager::mkConstInternal(Kind k, const T& val)
     return NodeClass(nv);
   }
 
-  nv = (expr::NodeValue*)std::malloc(sizeof(expr::NodeValue) + sizeof(T));
-  if (nv == NULL)
+  NodeValueClassic* nvc = (expr::NodeValueClassic*)std::malloc(sizeof(expr::NodeValueClassic) + sizeof(T));
+  if (nvc == NULL)
   {
     throw std::bad_alloc();
   }
+  nvc = new (nvc) NodeValueClassic();
 
-  nv->d_nchildren = 0;
-  nv->d_kind = static_cast<uint32_t>(k);
-  nv->d_id = d_nextId++;
-  nv->d_rc = 0;
+  nvc->d_nchildren = 0;
+  nvc->d_kind = static_cast<uint32_t>(k);
+  nvc->d_id = d_nextId++;
+  nvc->d_rc = 0;
 
-  new (&nv->d_children) T(val);
+  new (&nvc->d_children) T(val);
 
-  poolInsert(nv);
+  poolInsert(nvc);
   if (TraceIsOn("gc"))
   {
-    Trace("gc") << "creating node value " << nv << " [" << nv->d_id << "]: ";
-    nv->printAst(Trace("gc"));
+    Trace("gc") << "creating node value " << nvc << " [" << nvc->d_id << "]: ";
+    nvc->printAst(Trace("gc"));
     Trace("gc") << std::endl;
   }
 
-  return NodeClass(nv);
+  return NodeClass(nvc);
 }
 
 Node NodeManager::mkGroundTerm(const TypeNode& tn)

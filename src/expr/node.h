@@ -1231,7 +1231,7 @@ NodeTemplate<true> NodeTemplate<ref_count>::getOperator() const
   }
   Assert(mk == kind::metakind::PARAMETERIZED);
   /* The operator is the first child. */
-  return Node(d_nv->d_children[0]);
+  return Node(d_nv->getChildEntry(0));
 }
 
 /**
