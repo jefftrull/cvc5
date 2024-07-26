@@ -37,8 +37,13 @@ namespace expr {
 
 NodeValue::~NodeValue() {}
 
+NodeValue::NodeValue(uint64_t id, uint32_t rc, uint32_t kind)
+  : d_id(id), d_rc(rc), d_kind(kind)
+{
+}
+
 NodeValue::NodeValue(int)
-  : d_id(0), d_rc(MAX_RC), d_kind(static_cast<uint32_t>(Kind::NULL_EXPR))
+  : NodeValue(0, MAX_RC,static_cast<uint32_t>(Kind::NULL_EXPR))
 {
 }
 

@@ -407,20 +407,8 @@ expr::NodeValue* NodeBuilder::constructNV()
            "no children permitted";
 
     // we have to copy the inline NodeValue out
-    expr::NodeValueClassic* nv =
-        (expr::NodeValueClassic*)std::malloc(sizeof(expr::NodeValueClassic));
-    if (nv == nullptr)
-    {
-      throw std::bad_alloc();
-    }
-    nv = new (nv) expr::NodeValueClassic();
+    auto nv = new expr::NodeValueFixed<0>(d_nm->d_nextId++, 0, d_nv->d_kind);
 
-    // there are no children, so we don't have to worry about
-    // reference counts in this case.
-    nv->d_nchildren = 0;
-    nv->d_kind = d_nv->d_kind;
-    nv->d_id = d_nm->d_nextId++;
-    nv->d_rc = 0;
     setUsed();
     if (TraceIsOn("gc"))
     {

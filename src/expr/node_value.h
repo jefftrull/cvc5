@@ -304,8 +304,12 @@ protected:
   NodeValue()
   { /* do not initialize! */
   }
-  /** Private constructor for initializing the base class members */
+  /** Private constructor for initializing the base class members to default values */
   NodeValue(int);
+
+  /** Private constructor for specific values of base class members */
+  NodeValue(uint64_t id, uint32_t rc, uint32_t kind);
+
 
 private:
   void inc()
@@ -400,6 +404,31 @@ private:
 
   /** Variable number of child nodes */
   NodeValue* d_children[0];
+};
+
+template<uint32_t NChildren>
+class CVC5_EXPORT NodeValueFixed : public NodeValue {
+
+  static_assert(NChildren <= MAX_CHILDREN);
+
+  friend class cvc5::internal::NodeBuilder;
+
+  // define required member functions
+
+  inline NodeValue* const * getChildEntries() const final;
+  inline NodeValue* * getChildEntries() final;
+  inline uint32_t getNumChildEntries() const final;
+  inline NodeValue* getChildEntry(int i) const final;
+
+private:
+  friend class NodeValue;
+
+  template<typename... NVPtr>
+  NodeValueFixed(uint64_t id, uint32_t rc, uint32_t kind,
+                 NVPtr... children);
+
+  /** Fixed number of child nodes */
+  std::array<NodeValue*, NChildren> d_children;
 };
 
 inline NodeValue& NodeValue::null()
@@ -527,6 +556,34 @@ inline NodeValue* NodeValue::getChild(int i) const {
 
   Assert(i >= 0 && unsigned(i) < getNumChildEntries());
   return getChildEntry(i);
+}
+
+template<uint32_t NChildren>
+template<typename... NVPtr>
+NodeValueFixed<NChildren>::NodeValueFixed(uint64_t id, uint32_t rc, uint32_t kind,
+                                          NVPtr... children)
+  : NodeValue(id, rc, kind), d_children{children...}
+{
+}
+
+template<uint32_t NChildren>
+inline NodeValue* const * NodeValueFixed<NChildren>::getChildEntries() const {
+  return d_children.data();
+}
+
+template<uint32_t NChildren>
+inline NodeValue* * NodeValueFixed<NChildren>::getChildEntries() {
+  return d_children.data();
+}
+
+template<uint32_t NChildren>
+inline uint32_t NodeValueFixed<NChildren>::getNumChildEntries() const {
+  return NChildren;
+}
+
+template<uint32_t NChildren>
+inline NodeValue* NodeValueFixed<NChildren>::getChildEntry(int i) const {
+  return d_children[i];
 }
 
 }  // namespace expr
