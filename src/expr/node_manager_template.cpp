@@ -1345,19 +1345,7 @@ NodeClass NodeManager::mkConstInternal(Kind k, const T& val)
     return NodeClass(nv);
   }
 
-  NodeValueClassic* nvc = (expr::NodeValueClassic*)std::malloc(sizeof(expr::NodeValueClassic) + sizeof(T));
-  if (nvc == NULL)
-  {
-    throw std::bad_alloc();
-  }
-  nvc = new (nvc) NodeValueClassic();
-
-  nvc->d_nchildren = 0;
-  nvc->d_kind = static_cast<uint32_t>(k);
-  nvc->d_id = d_nextId++;
-  nvc->d_rc = 0;
-
-  new (&nvc->d_children) T(val);
+  NodeValueConst<T>* nvc = new NodeValueConst<T>(d_nextId++, 0, static_cast<uint32_t>(k), val);
 
   poolInsert(nvc);
   if (TraceIsOn("gc"))

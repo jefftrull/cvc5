@@ -461,6 +461,29 @@ private:
   std::vector<NodeValue*> d_children;
 };
 
+template<typename T>
+class CVC5_EXPORT NodeValueConst : public NodeValue {
+
+  friend class cvc5::internal::NodeManager;
+
+  // define required member functions
+
+public:
+  inline NodeValue* const * getChildEntries() const final;
+  inline NodeValue* * getChildEntries() final;
+  inline uint32_t getNumChildEntries() const final;
+  inline NodeValue* getChildEntry(int i) const final;
+
+  const T& getConst() const;
+
+private:
+  friend class NodeValue;
+
+  NodeValueConst(uint64_t id, uint32_t rc, uint32_t kind, T val);
+
+  T d_val;
+};
+
 inline NodeValue& NodeValue::null()
 {
   static NodeValue* s_null = new NodeValueClassic(0);
@@ -653,6 +676,39 @@ inline uint32_t NodeValueVariable::getNumChildEntries() const {
 
 inline NodeValue* NodeValueVariable::getChildEntry(int i) const {
   return d_children[i];
+}
+
+// NodeValueConst member functions
+template<typename T>
+NodeValueConst<T>::NodeValueConst(uint64_t id, uint32_t rc, uint32_t kind, T val)
+  : NodeValue(id, rc, kind), d_val(std::move(val))
+{
+}
+
+template<typename T>
+inline NodeValue* const * NodeValueConst<T>::getChildEntries() const {
+  return nullptr;   // Is this OK?
+}
+
+template<typename T>
+inline NodeValue* * NodeValueConst<T>::getChildEntries() {
+  return nullptr;
+}
+
+template<typename T>
+inline uint32_t NodeValueConst<T>::getNumChildEntries() const {
+  return 0;
+}
+
+template<typename T>
+inline NodeValue* NodeValueConst<T>::getChildEntry(int i) const {
+  Assert(false);
+  return nullptr;
+}
+
+template<typename T>
+inline const T& NodeValueConst<T>::getConst() const {
+  return d_val;
 }
 
 

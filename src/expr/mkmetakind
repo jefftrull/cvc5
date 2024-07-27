@@ -274,7 +274,7 @@ ${class} const& NodeValue::getConst< ${class} >() const {
   // \"constructed\" when initially checking them against the NodeManager
   // pool), we must check d_nchildren here.
   return getNumChildEntries() == 0
-    ? *reinterpret_cast< ${class} const* >(getChildEntries())
+    ? static_cast<NodeValueConst< ${class} > const *>(this)->getConst()
     : *reinterpret_cast< ${class} const* >(getChildEntry(0));
 }
 
@@ -329,7 +329,7 @@ Node NodeManager::mkConst(Kind k, const ${class}& val)
   cname=`echo "${class}" | awk 'BEGIN {FS="::"} {print$NF}'`
   metakind_constDeleters="${metakind_constDeleters}
   case Kind::$1:
-    std::destroy_at(reinterpret_cast< const ${class}* >(nv->getChildEntries()));
+    std::destroy_at(&static_cast< expr::NodeValueConst< ${class} > const * >(nv)->getConst());
     break;
 "
 }
