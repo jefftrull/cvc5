@@ -450,8 +450,10 @@ void NodeManager::reclaimZombies()
         // constant, but then, you should probably use a smart-pointer
         // type for a constant payload.)
         kind::metakind::deleteNodeValueConstant(nv);
+        free(nv);
+      } else {
+        delete nv;
       }
-      free(nv);
     }
   }
 } /* NodeManager::reclaimZombies() */

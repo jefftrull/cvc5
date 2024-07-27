@@ -23,8 +23,10 @@
 #ifndef CVC5__EXPR__NODE_VALUE_H
 #define CVC5__EXPR__NODE_VALUE_H
 
+#include <array>
 #include <iterator>
 #include <string>
+#include <vector>
 
 #include "expr/kind.h"
 #include "expr/metakind.h"
@@ -427,8 +429,36 @@ private:
   NodeValueFixed(uint64_t id, uint32_t rc, uint32_t kind,
                  NVPtr... children);
 
+  /** Helper functions for creating NodeValueFixed objects */
+  template<std::size_t... Is>
+  friend NodeValueFixed<sizeof...(Is)>*
+  mkNodeValueFixedImpl(uint64_t id, uint32_t rc, uint32_t kind,
+                       std::index_sequence<Is...>, NodeValue** start);
+
   /** Fixed number of child nodes */
   std::array<NodeValue*, NChildren> d_children;
+};
+
+class CVC5_EXPORT NodeValueVariable : public NodeValue {
+
+  friend class cvc5::internal::NodeBuilder;
+
+  // define required member functions
+
+  inline NodeValue* const * getChildEntries() const final;
+  inline NodeValue* * getChildEntries() final;
+  inline uint32_t getNumChildEntries() const final;
+  inline NodeValue* getChildEntry(int i) const final;
+
+private:
+  friend class NodeValue;
+
+  template<typename NVIter>
+  NodeValueVariable(uint64_t id, uint32_t rc, uint32_t kind,
+                    NVIter child_start, NVIter child_end);
+
+  /** Variable number of child nodes */
+  std::vector<NodeValue*> d_children;
 };
 
 inline NodeValue& NodeValue::null()
@@ -585,6 +615,46 @@ template<uint32_t NChildren>
 inline NodeValue* NodeValueFixed<NChildren>::getChildEntry(int i) const {
   return d_children[i];
 }
+
+// helper function for creating NodeValueFixed from a pointer and a count
+template<std::size_t... Is>
+inline NodeValueFixed<sizeof...(Is)>*
+mkNodeValueFixedImpl(uint64_t id, uint32_t rc, uint32_t kind,
+                     std::index_sequence<Is...>, NodeValue** start) {
+  return new NodeValueFixed<sizeof...(Is)>(id, rc, kind, start[Is]...);
+}
+
+template<std::size_t N>
+inline NodeValueFixed<N>*
+mkNodeValueFixed(uint64_t id, uint32_t rc, uint32_t kind,
+                 NodeValue** start) {
+  return mkNodeValueFixedImpl(id, rc, kind, std::make_index_sequence<N>(), start);
+}
+
+// NodeValueVariable member functions
+template<typename NVIter>
+NodeValueVariable::NodeValueVariable(uint64_t id, uint32_t rc, uint32_t kind,
+                                                NVIter children_start, NVIter children_end)
+  : NodeValue(id, rc, kind), d_children(children_start, children_end)
+{
+}
+
+inline NodeValue* const * NodeValueVariable::getChildEntries() const {
+  return d_children.data();
+}
+
+inline NodeValue* * NodeValueVariable::getChildEntries() {
+  return d_children.data();
+}
+
+inline uint32_t NodeValueVariable::getNumChildEntries() const {
+  return d_children.size();
+}
+
+inline NodeValue* NodeValueVariable::getChildEntry(int i) const {
+  return d_children[i];
+}
+
 
 }  // namespace expr
 }  // namespace cvc5::internal

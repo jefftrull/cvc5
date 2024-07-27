@@ -15,6 +15,7 @@
 
 #include "expr/node_builder.h"
 
+#include <boost/mp11/algorithm.hpp>
 #include <memory>
 
 namespace cvc5::internal {
@@ -480,23 +481,28 @@ expr::NodeValue* NodeBuilder::constructNV()
        * reference count. */
 
       // create the canonical expression value for this node
-      expr::NodeValueClassic* nv = (expr::NodeValueClassic*)std::malloc(
-          sizeof(expr::NodeValueClassic)
-          + (sizeof(expr::NodeValue*) * d_inlineNv.d_nchildren));
-      if (nv == nullptr)
+      // choose more efficient Fixed (std::array) container for
+      // child counts under some arbitrary compile-time limit
+      // (the tradeoff is greater code size vs. an extra pointer indirection)
+      constexpr std::size_t FIXED_LIMIT = 10;
+      expr::NodeValue* nv;
+      if (d_inlineNv.d_nchildren < FIXED_LIMIT)
       {
-        throw std::bad_alloc();
+        // use Boost.MP11 to implement a kind of compile-time switch to
+        // select and initialize the correct size container
+        using namespace boost::mp11;
+        nv = mp_with_index<FIXED_LIMIT>(
+          d_inlineNv.d_nchildren,
+          [&](auto nchildren) -> expr::NodeValue* {
+            // nchildren is a compile-time integer wrapper for d_inlineNv.d_nchildren
+            return expr::mkNodeValueFixed<nchildren>(d_nm->d_nextId++, 0, d_inlineNv.d_kind,
+                                                     d_inlineNv.d_children);
+          });
+      } else {
+        nv = new expr::NodeValueVariable(d_nm->d_nextId++, 0, d_inlineNv.d_kind,
+                                         d_inlineNv.d_children,
+                                         d_inlineNv.d_children + d_inlineNv.d_nchildren);
       }
-      nv = new (nv) expr::NodeValueClassic();
-      nv->d_nchildren = d_inlineNv.d_nchildren;
-      nv->d_kind = d_inlineNv.d_kind;
-      nv->d_id = d_nm->d_nextId++;
-      nv->d_rc = 0;
-
-      std::copy(d_inlineNv.d_children,
-                d_inlineNv.d_children + d_inlineNv.d_nchildren,
-                nv->d_children);
-
       d_inlineNv.d_nchildren = 0;
       setUsed();
 
